@@ -66,7 +66,7 @@ body {
 }
 
 .tab-button.active {
-    background-color: #4CAF50;
+    background-color: #000000;
     color: white;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
@@ -85,7 +85,7 @@ body {
 .section-title { font-size: 1.6em; color: #2C3E50; margin: 0; font-weight: 700; } /* Reduced from 1.8em */
 
 .add-task-btn {
-    background-color: #4CAF50;
+    background-color: #244e25;
     color: white;
     border: none;
     border-radius: 8px;
@@ -190,7 +190,7 @@ body {
 .priority-indicator { display: block; width: 8px; height: 25px; border-radius: 4px; } /* Reduced height */
 .priority-indicator.high { background-color: #E74C3C; }
 .priority-indicator.low { background-color: #F39C12; }
-.priority-indicator.medium { background-color: #2ECC71; }
+.priority-indicator.medium { background-color: #c71010; }
 
 
 .completed-title {
@@ -241,7 +241,7 @@ body {
 .modal-header h2 { margin: 0; font-size: 1.8em; color: #2C3E50; } /* Reduced from 2em */
 .close-icon {
     font-size: 1.6em; /* Reduced from 1.8em */
-    color: #4CAF50;
+    color: #E74C3C;
     cursor: pointer;
 }
 

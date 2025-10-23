@@ -88,17 +88,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const dueDateDisplay = formatDateForDisplay(deadline);
         // Use only the date part (YYYY-MM-DD) for the data attribute used by filtering
         const dataDueDate = deadline ? deadline.split('T')[0] : ''; 
-        const priorityClass = priority.toLowerCase();
-        
+        const priorityClass = (priority || '').toLowerCase();
+
         const listItem = document.createElement('li');
         listItem.classList.add('task-item');
         listItem.setAttribute('data-due-date', dataDueDate);
         listItem.setAttribute('data-id', id); // Add task ID to the list item
-        // If completed, add a class to distinguish it (not currently used for display, but good practice)
-        if (completed) {
-            listItem.classList.add('task-completed');
-        }
-        listItem.classList.add('hidden'); 
+        // If completed, add a class to distinguish it
+        if (completed) listItem.classList.add('task-completed');
 
         listItem.innerHTML = `
             <input type="checkbox" id="${id}" ${completed ? 'checked' : ''}>
@@ -115,15 +112,43 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderTasks = () => {
+        // Clear both lists (active tasks and completed tasks)
         taskList.innerHTML = '';
-        // Prepend tasks so the newest/most recently added appear at the top
+        const completedList = document.getElementById('completedList');
+        if (completedList) completedList.innerHTML = '';
+
+        // Render tasks: non-completed in the main list, completed in the completed list
         tasks.forEach(task => {
             const element = createNewTaskElement(task);
-            taskList.prepend(element);
+            if (task.completed) {
+                if (completedList) completedList.appendChild(element);
+            } else {
+                taskList.prepend(element); // newest first
+            }
         });
-        
-        const activeFilter = document.querySelector('.tab-button.active') ? 
-                             document.querySelector('.tab-button.active').getAttribute('data-status') : 
+
+        // Show/hide completed section depending on whether there are completed tasks
+        const completedTitle = document.querySelector('.completed-title');
+        if (completedList && completedTitle) {
+            if (completedList.children.length === 0) {
+                completedTitle.style.display = 'none';
+                completedList.style.display = 'none';
+            } else {
+                // Respect collapsed state if set, otherwise default to expanded
+                completedTitle.style.display = '';
+                const collapsed = completedTitle.dataset.collapsed === 'true';
+                if (collapsed) {
+                    completedList.style.display = 'none';
+                    const arrow = completedTitle.querySelector('.arrow'); if (arrow) arrow.textContent = '▼';
+                } else {
+                    completedList.style.display = '';
+                    const arrow = completedTitle.querySelector('.arrow'); if (arrow) arrow.textContent = '▲';
+                }
+            }
+        }
+
+        const activeFilter = document.querySelector('.tab-button.active') ?
+                             document.querySelector('.tab-button.active').getAttribute('data-status') :
                              'today';
         filterTasks(activeFilter);
     };
@@ -132,22 +157,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Task Filtering Logic
     const filterTasks = (filterStatus) => {
+        // Only filter non-completed tasks (those in the main taskList)
         taskList.querySelectorAll('.task-item').forEach(taskItem => {
             const dueDateString = taskItem.getAttribute('data-due-date');
             const taskStatus = getTaskStatus(dueDateString);
-            
-            // Get completion status from the rendered checkbox
-            const checkbox = taskItem.querySelector('input[type="checkbox"]');
-            const isCompleted = checkbox ? checkbox.checked : false;
 
-            // Only show tasks that are NOT completed based on the current simple UI structure
-            if (isCompleted) {
-                taskItem.classList.add('hidden');
-                return;
-            }
-            
             let isVisible = false;
-            
+
             if (filterStatus === 'today' && taskStatus === 'today') {
                 isVisible = true;
             } else if (filterStatus === 'pending' && taskStatus === 'pending') {
@@ -155,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (filterStatus === 'overdue' && taskStatus === 'overdue') {
                 isVisible = true;
             }
-            
+
             if (isVisible) {
                 taskItem.classList.remove('hidden');
             } else {
@@ -224,7 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // 3. Task Deletion & Editing Logic
-    taskList.addEventListener('click', (event) => {
+    // Use delegated handlers attached to both task lists (active and completed)
+    const handleListClick = (event) => {
+        // Find the clicked task item (works if clicking the icon or its child)
         const taskItem = event.target.closest('.task-item');
         if (!taskItem) return;
 
@@ -232,38 +250,54 @@ document.addEventListener('DOMContentLoaded', () => {
         const taskData = tasks.find(task => task.id === taskId);
         if (!taskData) return;
 
-        if (event.target.classList.contains('delete-icon')) {
+        // Use closest to allow clicks on nested elements inside the icon
+        const deleteBtn = event.target.closest('.delete-icon');
+        const editBtn = event.target.closest('.edit-icon');
+
+        if (deleteBtn) {
             // Deletion Logic
-            // NOTE: Per requirement, custom modal should be used instead of confirm() in production.
             if (confirm('Are you sure you want to delete this task? This action cannot be undone.')) {
                 tasks = tasks.filter(task => task.id !== taskId);
                 saveTasks(tasks);
-                taskItem.remove();
-                // No need to call renderTasks as the list item is removed directly
+                renderTasks();
             }
-        } else if (event.target.classList.contains('edit-icon')) {
+            return;
+        }
+
+        if (editBtn) {
             // Editing Logic
             openModalForEdit(taskData);
+            return;
         }
-    });
+    };
+
+    // Attach delegated click handlers to both lists
+    const completedListEl = document.getElementById('completedList');
+    if (taskList) taskList.addEventListener('click', handleListClick);
+    if (completedListEl) completedListEl.addEventListener('click', handleListClick);
 
     // FIX 1: Task Completion Toggle Logic
-    taskList.addEventListener('change', (event) => {
+    const handleListChange = (event) => {
         if (event.target.type === 'checkbox') {
             const taskId = event.target.id;
             const isCompleted = event.target.checked;
-            
+
             const taskIndex = tasks.findIndex(task => task.id === taskId);
-            
+
             if (taskIndex !== -1) {
                 tasks[taskIndex].completed = isCompleted;
                 saveTasks(tasks);
-                
-                // Re-render to apply filtering based on completion status
-                renderTasks(); 
+
+                // Re-render to apply filtering and move item between lists
+                renderTasks();
             }
         }
-    });
+    };
+
+    // Attach change listener to both lists (active and completed)
+    if (taskList) taskList.addEventListener('change', handleListChange);
+    const completedListEl2 = document.getElementById('completedList');
+    if (completedListEl2) completedListEl2.addEventListener('change', handleListChange);
 
     // --- Modal Logic ---
     const openModalForEdit = (taskData) => {
@@ -278,6 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBtn.textContent = 'Update Task';
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        // Update clear-button visibility for priority select
+        if (typeof setupPriorityClearButtons === 'function') setupPriorityClearButtons();
     };
 
     const openModalForNew = () => {
@@ -288,6 +324,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBtn.textContent = 'Add Task';
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
+        // Ensure clear button visibility is correct after reset
+        if (typeof setupPriorityClearButtons === 'function') setupPriorityClearButtons();
     };
     
     const closeModal = () => {
@@ -316,6 +354,87 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
+    // --- Clear (priority) button functionality ---
+    // Ensures the small 'x' inside custom selects clears the select value and hides itself.
+    const setupPriorityClearButtons = () => {
+        document.querySelectorAll('.priority-close-x').forEach(btn => {
+            const wrapper = btn.closest('.custom-select-wrapper');
+            if (!wrapper) return;
+            const select = wrapper.querySelector('select');
+            if (!select) return;
+
+            // If there's no empty option, insert a hidden empty option so we can clear to a true empty value.
+            const hasEmptyOption = Array.from(select.options).some(o => o.value === '');
+            if (!hasEmptyOption) {
+                const emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.text = '';
+                emptyOpt.hidden = true; // keep it out of the dropdown
+                // Insert as the first option
+                select.insertBefore(emptyOpt, select.firstChild);
+            }
+
+            const updateVisibility = () => {
+                // Show button when there's a value selected (non-empty)
+                if (select.value && select.value !== '') {
+                    btn.style.display = '';
+                } else {
+                    btn.style.display = 'none';
+                }
+            };
+
+            // Initial state
+            updateVisibility();
+
+            // Clicking the clear button resets the select and hides the button
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                select.value = '';
+                // Notify any listeners
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                updateVisibility();
+            });
+
+            // Toggle visibility when the select changes
+            select.addEventListener('change', updateVisibility);
+        });
+    };
+    
+    // --- Completed section toggle ---
+    // Clicking the .completed-title header toggles the visibility of #completedList and flips the arrow
+    const setupCompletedToggle = () => {
+        const title = document.querySelector('.completed-title');
+        const list = document.getElementById('completedList');
+        if (!title || !list) return;
+
+        // Avoid attaching multiple handlers
+        if (title.dataset.toggleAttached === 'true') return;
+
+        // Ensure a default collapsed state exists
+        if (typeof title.dataset.collapsed === 'undefined') title.dataset.collapsed = 'false';
+
+        title.addEventListener('click', () => {
+            const collapsed = title.dataset.collapsed === 'true';
+            if (collapsed) {
+                // show
+                list.style.display = '';
+                const arrow = title.querySelector('.arrow'); if (arrow) arrow.textContent = '▲';
+                title.dataset.collapsed = 'false';
+            } else {
+                // hide
+                list.style.display = 'none';
+                const arrow = title.querySelector('.arrow'); if (arrow) arrow.textContent = '▼';
+                title.dataset.collapsed = 'true';
+            }
+        });
+
+        title.dataset.toggleAttached = 'true';
+    };
+    
     // --- Initialization ---
     renderTasks();
+    // Wire up priority clear buttons on initial load
+    if (typeof setupPriorityClearButtons === 'function') setupPriorityClearButtons();
+    // Wire up completed toggle
+    if (typeof setupCompletedToggle === 'function') setupCompletedToggle();
 });
